@@ -40,7 +40,13 @@ class Preprocessor:
         normal_sample_list = []
         for ind, sample in tqdm(enumerate(data), desc = "Transforming data format"):
             if ori_format == "casrel":
-                text = sample["text"]
+                try:
+                    text = sample["text"]
+                except:
+                    print('index: {} | text: '.format(ind))
+                    for key, val in sample.items():
+                        print('{}: {}'.format(key, val))
+                    raise ValueError('text not found')
                 rel_list = sample["triple_list"]
                 subj_key, pred_key, obj_key = 0, 1, 2
             elif ori_format == "etl_span":
@@ -167,6 +173,7 @@ class Preprocessor:
         add a stake to bad samples(char span error) and remove them from the clean data
         '''
         bad_samples, clean_data = [], []
+
         def strip_white(entity, entity_char_span):
             p = 0
             while entity[p] == " ":
@@ -178,23 +185,32 @@ class Preprocessor:
                 entity_char_span[1] -= 1
                 p -= 1
             return entity.strip(), entity_char_span
-            
-        for sample in tqdm(ori_data, desc = "clean data w char spans"):
+
+        def compute_char_span(text, entity):
+            start = text.find(entity)
+            end = start + len(entity)
+            return [start, end]
+
+        for sample in tqdm(ori_data, desc="clean data w char spans"):
             text = sample["text"]
 
             bad = False
             for rel in sample["relation_list"]:
                 # rm whitespaces
+                subj_char_span = compute_char_span(text, rel['subject'])
+                obj_char_span = compute_char_span(text, rel['object'])
+                rel["subj_char_span"] = subj_char_span
+                rel['obj_char_span'] = obj_char_span
                 rel["subject"], rel["subj_char_span"] = strip_white(rel["subject"], rel["subj_char_span"])
                 rel["object"], rel["obj_char_span"] = strip_white(rel["object"], rel["obj_char_span"])
 
                 subj_char_span = rel["subj_char_span"]
                 obj_char_span = rel["obj_char_span"]
                 if rel["subject"] not in text or rel["subject"] != text[subj_char_span[0]:subj_char_span[1]] or \
-                    rel["object"] not in text or rel["object"] != text[obj_char_span[0]:obj_char_span[1]]:
+                        rel["object"] not in text or rel["object"] != text[obj_char_span[0]:obj_char_span[1]]:
                     rel["stake"] = 0
                     bad = True
-                    
+
             if bad:
                 bad_samples.append(copy.deepcopy(sample))
 
